@@ -149,6 +149,7 @@ class AddressDefaultWidget extends WidgetBase implements ContainerFactoryPluginI
   public static function defaultSettings() {
     return [
       'default_country' => NULL,
+      'preferred_countries' => [],
     ] + parent::defaultSettings();
   }
 
@@ -156,6 +157,7 @@ class AddressDefaultWidget extends WidgetBase implements ContainerFactoryPluginI
    * {@inheritdoc}
    */
   public function settingsForm(array $form, FormStateInterface $form_state) {
+    // TODO: We should get available_countries list instead of countries.
     $country_list = $this->countryRepository->getList();
     $element = [];
     $element['default_country'] = [
@@ -164,6 +166,15 @@ class AddressDefaultWidget extends WidgetBase implements ContainerFactoryPluginI
       '#options' => ['site_default' => $this->t('- Site default -')] + $country_list,
       '#default_value' => $this->getSetting('default_country'),
       '#empty_value' => '',
+    ];
+    $element['preferred_countries'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Preferred countries'),
+      '#options' => $country_list,
+      '#default_value' => $this->getSetting('preferred_countries'),
+      '#empty_value' => '',
+      '#multiple' => TRUE,
+      '#size' => 10,
     ];
 
     return $element;
@@ -268,6 +279,20 @@ class AddressDefaultWidget extends WidgetBase implements ContainerFactoryPluginI
       ];
       $country_list = $missingElement + $country_list;
     }
+
+    // Put preferred countries at top of list.
+    $preferred_countries = $this->getSetting('preferred_countries');
+    $preferred_countries_list = [];
+    foreach ($preferred_countries as &$preferred_country_code) {
+      if (!isset($country_list[$preferred_country_code])) {
+        unset($preferred_country_code);
+      }
+      else {
+        $preferred_countries_list[$preferred_country_code] = $country_list[$preferred_country_code];
+        unset($country_list[$preferred_country_code]);
+      }
+    }
+    $country_list = array_merge($preferred_countries_list, $country_list);
 
     // Calling initializeLangcode() every time, and not just when the field
     // is empty, ensures that the langcode can be changed on subsequent

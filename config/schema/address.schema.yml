@@ -173,3 +173,8 @@ field.widget.settings.address_default:
     default_country:
       type: string
       label: 'Default country'
+    preferred_countries:
+      type: sequence
+      label: 'Preferred countries'
+      sequence:
+        - type: string
