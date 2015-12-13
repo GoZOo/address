@@ -134,6 +134,7 @@ class AddressDefaultWidgetTest extends WebTestBase {
       'type' => 'address_default',
       'settings' => [
         'default_country' => 'US',
+        'preferred_countries' => ['FR', 'BR'],
       ],
     ])->save();
 
@@ -167,6 +168,11 @@ class AddressDefaultWidgetTest extends WebTestBase {
     $this->drupalGet($this->nodeAddUrl);
     $this->assertTrue((bool) $this->xpath('//select[@name="' . $field_name . '[0][country_code]" and boolean(@required)]'), 'Country is shown as required.');
     $this->assertOptionSelected('edit-field-address-0-country-code', 'US', 'The configured default_country is selected.');
+
+    // FR and BR countries are preferred, so they should be displayed at top
+    // of countries list.
+    $this->assertOptionOrder($field_name . '[0][country_code]', 'FR', 0, 'The preferred country FR is first on the list as expected.');
+    $this->assertOptionOrder($field_name . '[0][country_code]', 'BR', 1, 'The preferred country BR is second on the list as expected.');
 
     // All countries should be present in the form.
     $countries = array_keys($this->countryRepository->getList());
@@ -416,6 +422,33 @@ class AddressDefaultWidgetTest extends WebTestBase {
     $this->assertFieldByName($field_name . '[0][locality]', '', 'Field locality has been cleared');
     $this->assertFieldByName($field_name . '[0][dependent_locality]', '', 'Field dependent_locality has been cleared');
     $this->assertFieldByName($field_name . '[0][postal_code]', '', 'Field postal_code has been cleared.');
+  }
+
+  /**
+   * Asserts that a select field has a specific option at a position.
+   *
+   * @param string $id
+   *   ID of select field to assert.
+   * @param string $option
+   *   Option value to assert.
+   * @param string $delta
+   *   Delta position of option value to assert.
+   * @param string $message
+   *   (optional) A message to display with the assertion. Do not translate
+   *   messages: use \Drupal\Component\Utility\SafeMarkup::format() to embed
+   *   variables in the message text, not t(). If left blank, a default message
+   *   will be displayed.
+   */
+  protected function assertOptionOrder($id, $option, $delta, $message) {
+    $elements = $this->xpath('//select[@name="' . $id . '"]/option/@value');
+    // Delta has to be +1 thanks first value of select is an empty value.
+    $delta++;
+    if ($elements[$delta]->__toString() == $option) {
+      $this->assertTrue(TRUE, $message);
+    }
+    else {
+      $this->assertTrue(FALSE, $message);
+    }
   }
 
   /**
