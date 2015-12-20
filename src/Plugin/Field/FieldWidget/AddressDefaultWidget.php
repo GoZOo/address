@@ -196,6 +196,15 @@ class AddressDefaultWidget extends WidgetBase implements ContainerFactoryPluginI
     else {
       $summary['default_country'] = $this->t('Default country: @country', array('@country' => $country_list[$default_country]));
     }
+
+    // Display summary for preferred countries setting.
+    $preferred_countries = $this->getSetting('preferred_countries');
+    if (!empty($preferred_countries)) {
+      foreach ($preferred_countries as &$preferred_country) {
+        $preferred_country = $country_list[$preferred_country];
+      }
+      $summary['preferred_countries'] = $this->t('Preferred countries: @countries', array('@countries' => implode(', ', $preferred_countries)));
+    }
     return $summary;
   }
 
