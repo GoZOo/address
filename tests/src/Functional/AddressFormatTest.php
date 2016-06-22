@@ -84,7 +84,7 @@ class AddressFormatTest extends BrowserTestBase {
     ];
     $this->drupalGet('admin/config/regional/address-formats/add');
     $this->assertSession()->statusCodeEquals(200);
-    $this->drupalPostForm('admin/config/regional/address-formats/add', $edit, t('Save'));
+    $this->submitForm($edit, t('Save'));
 
     $address_format = AddressFormat::load($country_code);
     $this->assertEquals($address_format->getCountryCode(), $edit['countryCode'], 'The new address format has the correct countryCode.');
@@ -117,7 +117,7 @@ class AddressFormatTest extends BrowserTestBase {
     $assert_session = $this->assertSession();
     $assert_session->statusCodeEquals(200);
     $assert_session->responseContains(t('This action cannot be undone.'));
-    $this->drupalPostForm(NULL, array(), t('Delete'));
+    $this->submitForm([], t('Delete'));
 
     $address_formatExists = (bool) AddressFormat::load($country_code);
     $this->assertFalse($address_formatExists, 'The address format has been deleted form the database.');
