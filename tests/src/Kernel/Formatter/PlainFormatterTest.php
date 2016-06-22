@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\address\Tests\Formatter;
+namespace Drupal\Tests\address\Kernel\Formatter;
 
 use Drupal\Component\Utility\Unicode;
 use Drupal\Core\Entity\Display\EntityViewDisplayInterface;
@@ -9,7 +9,7 @@ use Drupal\entity_test\Entity\EntityTest;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\language\Entity\ConfigurableLanguage;
-use Drupal\simpletest\KernelTestBase;
+use Drupal\KernelTests\KernelTestBase;
 
 /**
  * Tests the plain formatter.
