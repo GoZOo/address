@@ -4,15 +4,15 @@ namespace Drupal\Tests\address\Functional;
 
 use Drupal\address\Entity\Zone;
 use Drupal\Component\Render\FormattableMarkup;
+use Drupal\FunctionalJavascriptTests\JavascriptTestBase;
 use Drupal\simpletest\BlockCreationTrait;
-use Drupal\Tests\BrowserTestBase;
 
 /**
  * Tests the zone entity and UI.
  *
  * @group address
  */
-class ZoneTest extends BrowserTestBase {
+class ZoneTest extends JavascriptTestBase {
 
   use BlockCreationTrait;
 
@@ -59,27 +59,32 @@ class ZoneTest extends BrowserTestBase {
   function testCreateZone() {
     $this->drupalGet('admin/config/regional/zones/add');
 
+    $session = $this->getSession();
+
     // Add a Country zone member, select the US.
-    $zone_member_values = [
-      'plugin' => 'country',
-    ];
-    $this->submitForm($zone_member_values, t('Add'));
-    $country_values = [
-      'members[0][form][country_code]' => 'US',
-    ];
-    $this->submitForm($country_values, 'members[0][form][country_code]');
+    // This form has to be submitted by javascript.
+    $this->submitForm(['plugin' => 'country'], t('Add'));
+    $this->waitForAjaxToFinish();
+    $session->getPage()->fillField('members[0][form][name]', 'California');
+    // No needs to submit, but this field perform ajax call, so we need to wait
+    // after response.
+    $session->getPage()->fillField('members[0][form][country_code]', 'US');
+    $this->waitForAjaxToFinish();
+
     // Add an EU zone member.
-    $zone_member_values = [
-      'plugin' => 'eu',
-    ];
-    $this->submitForm($zone_member_values, t('Add'));
+    // This form has to be submitted by javascript.
+    $this->submitForm(['plugin' => 'eu'], t('Add'));
+    $this->waitForAjaxToFinish();
+
     // Add, then remove a Zone zone member.
     // Confirms that removing unsaved zone members works.
-    $zone_member_values = [
-      'plugin' => 'zone',
-    ];
-    $this->submitForm($zone_member_values, t('Add'));
+    // This form has to be submitted by javascript.
+    $this->submitForm(['plugin' => 'zone'], t('Add'));
+    $this->waitForAjaxToFinish();
+
+    // This form has to be submitted by javascript.
     $this->submitForm([], 'remove_member2');
+    $this->waitForAjaxToFinish();
 
     // Finish creating the zone and zone members.
     $edit = [
@@ -87,14 +92,20 @@ class ZoneTest extends BrowserTestBase {
       'name' => 'Test zone',
       'scope' => $this->randomMachineName(6),
       'members[0][form][name]' => 'California',
-      'members[0][form][country_code]' => 'US',
       'members[0][form][administrative_area]' => 'US-CA',
       'members[0][form][included_postal_codes]' => '123',
       'members[0][form][excluded_postal_codes]' => '456',
       'members[1][form][name]' => 'European Union',
     ];
+
+    // Real submit so do not wait after ajax.
     $this->submitForm($edit, t('Save'));
 
+    // Add country code now. If with send it on previous submit, phantomjs will
+    // perform ajax request and other datas will be lost.
+    $edit['members[0][form][country_code]'] = 'US';
+
+    // Load new Zone so we can check everything is saved.
     $zone = Zone::load($edit['id']);
     $this->assertEquals($zone->getName(), $edit['name'], 'The created zone has the correct name.');
     $this->assertEquals($zone->getScope(), $edit['scope'], 'The created zone has the correct scope.');
@@ -116,11 +127,10 @@ class ZoneTest extends BrowserTestBase {
     $this->assertEquals($second_member->getName(), $edit['members[1][form][name]'], 'The second created zone member has the correct name.');
 
     // Add another zone that references the current one.
+    // This submission is a javascript submit.
     $this->drupalGet('admin/config/regional/zones/add');
-    $zone_member_values = [
-      'plugin' => 'zone',
-    ];
-    $this->submitForm($zone_member_values, t('Add'));
+    $this->submitForm(['plugin' => 'zone'], t('Add'));
+    $this->waitForAjaxToFinish();
 
     $edit = [
       'id' => 'test_zone2',
@@ -128,6 +138,7 @@ class ZoneTest extends BrowserTestBase {
       'members[0][form][name]' => 'Previous zone',
       'members[0][form][zone]' => 'Test zone (test_zone)',
     ];
+    // This is a real form submit. No needs to wait after ajax.
     $this->submitForm($edit, t('Save'));
 
     $zone = Zone::load($edit['id']);
@@ -209,6 +220,14 @@ class ZoneTest extends BrowserTestBase {
     $zone = $storage->load($zone->id());
 
     return $zone;
+  }
+
+  /**
+   * Waits for jQuery to become active and animations to complete.
+   */
+  protected function waitForAjaxToFinish() {
+    $condition = "(0 === jQuery.active && 0 === jQuery(':animated').length)";
+    $this->assertJsCondition($condition, 10000);
   }
 
 }
