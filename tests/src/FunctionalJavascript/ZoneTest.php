@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\Tests\address\Functional;
+namespace Drupal\Tests\address\FunctionalJavascript;
 
 use Drupal\address\Entity\Zone;
 use Drupal\Component\Render\FormattableMarkup;
