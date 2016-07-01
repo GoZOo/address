@@ -1,18 +1,23 @@
 <?php
 
-namespace Drupal\address\Tests;
+namespace Drupal\Tests\address\FunctionalJavascript;
 
+use CommerceGuys\Addressing\Repository\AddressFormatRepositoryInterface;
+use CommerceGuys\Addressing\Repository\CountryRepositoryInterface;
+use CommerceGuys\Addressing\Repository\SubdivisionRepositoryInterface;
+use Drupal\Component\Render\FormattableMarkup;
+use Drupal\Core\Entity\Entity\EntityFormDisplay;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
-use Drupal\Core\Entity\Entity\EntityFormDisplay;
-use Drupal\simpletest\WebTestBase;
+use Drupal\FunctionalJavascriptTests\JavascriptTestBase;
+use Drupal\node\Entity\NodeType;
 
 /**
  * Tests the default address widget.
  *
  * @group address
  */
-class AddressDefaultWidgetTest extends WebTestBase {
+class AddressDefaultWidgetTest extends JavascriptTestBase {
 
   /**
    * Modules to enable.
@@ -91,7 +96,11 @@ class AddressDefaultWidgetTest extends WebTestBase {
   protected function setUp() {
     parent::setUp();
 
-    $this->drupalCreateContentType(['type' => 'article']);
+    // Create node bundle for tests.
+    $type = NodeType::create(['name' => 'Article', 'type' => 'article']);
+    $type->save();
+
+    // Create user that will be used for tests.
     $this->adminUser = $this->drupalCreateUser([
       'create article content',
       'edit own article content',
@@ -117,13 +126,15 @@ class AddressDefaultWidgetTest extends WebTestBase {
 
     // Set article's form display.
     $this->formDisplay = EntityFormDisplay::load('node.article.default');
+
     if (!$this->formDisplay) {
-      $this->formDisplay = EntityFormDisplay::create([
+      EntityFormDisplay::create([
         'targetEntityType' => 'node',
         'bundle' => 'article',
         'mode' => 'default',
         'status' => TRUE,
       ])->save();
+      $this->formDisplay = EntityFormDisplay::load('node.article.default');
     }
     $this->formDisplay->setComponent($this->field->getName(), [
       'type' => 'address_default',
@@ -150,18 +161,17 @@ class AddressDefaultWidgetTest extends WebTestBase {
    */
   function testCountries() {
     $field_name = $this->field->getName();
-    $edit = [];
     // Optional field: Country should be optional and set to default_country.
     $this->drupalGet($this->nodeAddUrl);
-    $this->assertFalse((bool) $this->xpath('//select[@name="' . $field_name . '[0][country_code]" and boolean(@required)]'), 'Country is shown as optional.');
-    $this->assertOptionSelected('edit-field-address-0-country-code', 'US', 'The configured default_country is selected.');
+    $this->assertEmpty((bool) $this->xpath('//select[@name="' . $field_name . '[0][country_code]" and boolean(@required)]'), 'Country is shown as optional.');
+    $this->assertOptionSelected($field_name . '[0][country_code]', 'US', 'The configured default_country is selected.');
 
     // Required field: Country should be required and set to default_country.
     $this->field->setRequired(TRUE);
     $this->field->save();
     $this->drupalGet($this->nodeAddUrl);
-    $this->assertTrue((bool) $this->xpath('//select[@name="' . $field_name . '[0][country_code]" and boolean(@required)]'), 'Country is shown as required.');
-    $this->assertOptionSelected('edit-field-address-0-country-code', 'US', 'The configured default_country is selected.');
+    $this->assertNotEmpty((bool) $this->xpath('//select[@name="' . $field_name . '[0][country_code]" and boolean(@required)]'), 'Country is shown as required.');
+    $this->assertOptionSelected($field_name . '[0][country_code]', 'US', 'The configured default_country is selected.');
 
     // All countries should be present in the form.
     $countries = array_keys($this->countryRepository->getList());
@@ -169,11 +179,12 @@ class AddressDefaultWidgetTest extends WebTestBase {
 
     // Limit the list of available countries.
     $countries = ['US', 'FR', 'BR', 'JP'];
+    $edit = [];
     $edit['settings[available_countries][]'] = array_map(function ($country) {
       return $country;
     }, $countries);
     $this->drupalPostForm($this->fieldConfigUrl, $edit, t('Save settings'));
-    $this->assertResponse(200);
+    $this->assertSession()->statusCodeEquals(200);
     $this->drupalGet($this->nodeAddUrl);
     $this->assertOptions($field_name . '[0][country_code]', $countries, 'The restricted list of available countries is present.');
 
@@ -193,11 +204,11 @@ class AddressDefaultWidgetTest extends WebTestBase {
       $path = $field_name . '[0][' . $property . ']';
       $edit[$path] = $value;
     }
-    $this->drupalPostForm(NULL, $edit, t('Save'));
-    $this->assertResponse(200);
+    $this->submitForm($edit, t('Save'));
+    $this->assertSession()->statusCodeEquals(200);
     // Check that the article has been created.
-    $node = $this->drupalGetNodeByTitle($edit['title[0][value]']);
-    $this->assertTrue($node, 'Created article ' . $edit['title[0][value]']);
+    $node = $this->getNodeByTitle($edit['title[0][value]']);
+    $this->assertNotEmpty($node, 'Created article ' . $edit['title[0][value]']);
 
     // Now remove 'US' from the list of available countries.
     $countries = ['FR', 'BR', 'JP'];
@@ -211,13 +222,13 @@ class AddressDefaultWidgetTest extends WebTestBase {
     // 'US' should be in the list along with the available countries and should
     // be selected.
     $this->drupalGet('node/' . $node->id() . '/edit');
-    $this->assertFieldByName($field_name . '[0][recipient]', $address['recipient']);
-    $this->assertFieldByName($field_name . '[0][organization]', $address['organization']);
-    $this->assertFieldByName($field_name . '[0][address_line1]', $address['address_line1']);
-    $this->assertFieldByName($field_name . '[0][locality]', $address['locality']);
-    $this->assertOptionSelected('edit-field-address-0-administrative-area', $address['administrative_area']);
-    $this->assertFieldByName($field_name . '[0][postal_code]', $address['postal_code']);
-    $this->assertOptionSelected('edit-field-address-0-country-code', $address['country_code']);
+    $this->assertSession()->fieldValueEquals($field_name . '[0][recipient]', $address['recipient']);
+    $this->assertSession()->fieldValueEquals($field_name . '[0][organization]', $address['organization']);
+    $this->assertSession()->fieldValueEquals($field_name . '[0][address_line1]', $address['address_line1']);
+    $this->assertSession()->fieldValueEquals($field_name . '[0][locality]', $address['locality']);
+    $this->assertOptionSelected($field_name . '[0][administrative_area]', $address['administrative_area']);
+    $this->assertSession()->fieldValueEquals($field_name . '[0][postal_code]', $address['postal_code']);
+    $this->assertOptionSelected($field_name . '[0][country_code]', $address['country_code']);
 
     // Test the widget with only one available country.
     // Since the field is required, the country selector should be hidden.
@@ -229,16 +240,16 @@ class AddressDefaultWidgetTest extends WebTestBase {
     $this->drupalPostForm($this->fieldConfigUrl, $edit, t('Save settings'));
 
     $this->drupalGet('node/' . $node->id() . '/edit');
-    $this->assertNoFieldByName($field_name . '[0][country_code]');
+    $this->assertSession()->fieldNotExists($field_name . '[0][country_code]');
     // Submitting the form should result in no data loss.
-    $this->drupalPostForm(NULL, [], t('Save'));
+    $this->submitForm([], t('Save'));
     $this->drupalGet('node/' . $node->id() . '/edit');
-    $this->assertFieldByName($field_name . '[0][recipient]', $address['recipient']);
-    $this->assertFieldByName($field_name . '[0][organization]', $address['organization']);
-    $this->assertFieldByName($field_name . '[0][address_line1]', $address['address_line1']);
-    $this->assertFieldByName($field_name . '[0][locality]', $address['locality']);
-    $this->assertOptionSelected('edit-field-address-0-administrative-area', $address['administrative_area']);
-    $this->assertFieldByName($field_name . '[0][postal_code]', $address['postal_code']);
+    $this->assertSession()->fieldValueEquals($field_name . '[0][recipient]', $address['recipient']);
+    $this->assertSession()->fieldValueEquals($field_name . '[0][organization]', $address['organization']);
+    $this->assertSession()->fieldValueEquals($field_name . '[0][address_line1]', $address['address_line1']);
+    $this->assertSession()->fieldValueEquals($field_name . '[0][locality]', $address['locality']);
+    $this->assertOptionSelected($field_name . '[0][administrative_area]', $address['administrative_area']);
+    $this->assertSession()->fieldValueEquals($field_name . '[0][postal_code]', $address['postal_code']);
   }
 
   /**
@@ -264,7 +275,7 @@ class AddressDefaultWidgetTest extends WebTestBase {
     foreach ($initialValues as $key => $value) {
       if ($value) {
         $name = $field_name . '[0][' . $key . ']';
-        $this->assertFieldByName($name, $value, 'Field ' . $key . ' set to initial value ' . $value . ' by the event subscriber.');
+        $this->assertSession()->fieldValueEquals($name, $value);
       }
     }
     // Remove the address_test module.
@@ -294,12 +305,14 @@ class AddressDefaultWidgetTest extends WebTestBase {
     // US has all fields except sorting code and dependent locality.
     // France has sorting code, and China has dependent locality, so these
     // countries cover all fields.
+    $this->drupalGet($this->nodeAddUrl);
+    $session = $this->getSession();
     foreach (['US', 'FR', 'CN'] as $country) {
       $addressFormat = $this->addressFormatRepository->get($country);
       $usedFields = $addressFormat->getUsedFields();
 
-      $edit[$field_name . '[0][country_code]'] = $country;
-      $this->drupalPostAjaxForm($this->nodeAddUrl, $edit, $field_name . '[0][country_code]');
+      $session->getPage()->fillField($field_name . '[0][country_code]', $country);
+      $this->waitForAjaxToFinish();
       // Compare the found fields to the address format.
       // Make one assert instead of many asserts for each field's existence.
       $elements = $this->xpath('//input[starts-with(@name,"' . $field_name . '")]/@name | //select[starts-with(@name,"' . $field_name . '")]/@name');
@@ -319,25 +332,29 @@ class AddressDefaultWidgetTest extends WebTestBase {
       $edit['settings[fields][' . $field . ']'] = !in_array($field, $disabledFields);
     }
     $this->drupalPostForm($this->fieldConfigUrl, $edit, t('Save settings'));
-    $this->assertResponse(200);
+    $this->assertSession()->statusCodeEquals(200);
 
     // Confirm the absence of disabled fields.
     $this->drupalGet($this->nodeAddUrl);
-    $this->assertFalse((bool) $this->xpath('//input[@name="' . implode('" or @name="', $disabledFields) . '"]'), 'Disabled fields ' . implode(', ', $disabledFields) . ' are absent.');
+    $this->assertEmpty((bool) $this->xpath('//input[@name="' . implode('" or @name="', $disabledFields) . '"]'), 'Disabled fields ' . implode(', ', $disabledFields) . ' are absent.');
 
     // Confirm that creating an address without the disabled fields works.
     $edit = [];
     $edit['title[0][value]'] = $this->randomMachineName(8);
-    $edit[$field_name . '[0][country_code]'] = 'US';
+
+    // Use javascript to fill country_code so other fields can be loaded.
+    $session->getPage()->fillField($edit[$field_name . '[0][country_code]'], 'US');
+    $this->waitForAjaxToFinish();
+
     $edit[$field_name . '[0][organization]'] = 'Some Organization';
     $edit[$field_name . '[0][address_line1]'] = '1098 Alta Ave';
     $edit[$field_name . '[0][address_line2]'] = 'Street 2';
     $edit[$field_name . '[0][locality]'] = 'Mountain View';
     $edit[$field_name . '[0][administrative_area]'] = 'US-CA';
-    $this->drupalPostForm(NULL, $edit, t('Save'));
-    $this->assertResponse(200);
-    $node = $this->drupalGetNodeByTitle($edit['title[0][value]']);
-    $this->assertTrue($node, 'Created article ' . $edit['title[0][value]']);
+    $this->submitForm($edit, t('Save'));
+    $this->assertSession()->statusCodeEquals(200);
+    $node = $this->getNodeByTitle($edit['title[0][value]']);
+    $this->assertNotEmpty($node, 'Created article ' . $edit['title[0][value]']);
   }
 
   /**
@@ -345,6 +362,7 @@ class AddressDefaultWidgetTest extends WebTestBase {
    */
   function testSubdivisions() {
     $field_name = $this->field->getName();
+    $session = $this->getSession();
     // Using China since it has predefined subdivisions on all three levels.
     $country = 'CN';
     $administrativeArea = 'CN-13';
@@ -353,24 +371,21 @@ class AddressDefaultWidgetTest extends WebTestBase {
     $localities = $this->subdivisionRepository->getList($country, $administrativeArea);
     $dependentLocalities = $this->subdivisionRepository->getList($country, $locality);
     // Confirm the presence and format of the administrative area dropdown.
-    $edit = [];
-    $edit[$field_name . '[0][country_code]'] = $country;
-    $this->drupalPostAjaxForm($this->nodeAddUrl, $edit, $field_name . '[0][country_code]');
+    $this->drupalGet($this->nodeAddUrl);
+    $session->getPage()->fillField($field_name . '[0][country_code]', $country);
+    $this->waitForAjaxToFinish();
     $this->assertOptions($field_name . '[0][administrative_area]', array_keys($administrativeAreas), 'All administrative areas for country ' . $country . ' are present.');
 
     // Confirm the presence and format of the locality dropdown.
-    $edit = [];
-    $edit[$field_name . '[0][administrative_area]'] = $administrativeArea;
-    $this->drupalPostAjaxForm(NULL, $edit, $field_name . '[0][administrative_area]');
-    $this->assertResponse(200);
-    $this->assertOptionSelectedWithDrupalSelector('edit-field-address-0-administrative-area', $administrativeArea, 'Selected administrative area ' . $administrativeAreas[$administrativeArea]);
+    $session->getPage()->fillField($field_name . '[0][administrative_area]', $administrativeArea);
+    $this->waitForAjaxToFinish();
+    $this->assertOptionSelected($field_name . '[0][administrative_area]', $administrativeArea, 'Selected administrative area ' . $administrativeAreas[$administrativeArea]);
     $this->assertOptions($field_name . '[0][locality]', array_keys($localities), 'All localities for administrative area ' . $administrativeAreas[$administrativeArea] . ' are present.');
 
     // Confirm the presence and format of the dependent locality dropdown.
-    $edit[$field_name . '[0][locality]'] = $locality;
-    $this->drupalPostAjaxForm(NULL, $edit, $field_name . '[0][locality]');
-    $this->assertResponse(200);
-    $this->assertOptionSelectedWithDrupalSelector('edit-field-address-0-locality', $locality, 'Selected locality ' . $localities[$locality]);
+    $session->getPage()->fillField($field_name . '[0][locality]', $locality);
+    $this->waitForAjaxToFinish();
+    $this->assertOptionSelected($field_name . '[0][locality]', $locality, 'Selected locality ' . $localities[$locality]);
     $this->assertOptions($field_name . '[0][dependent_locality]', array_keys($dependentLocalities), 'All dependent localities for locality ' . $localities[$locality] . ' are present.');
   }
 
@@ -380,9 +395,15 @@ class AddressDefaultWidgetTest extends WebTestBase {
   function testClearValues() {
     $field_name = $this->field->getName();
     // Create an article with all fields filled.
+    $this->drupalGet($this->nodeAddUrl);
+    $session = $this->getSession();
     $edit = [];
     $edit['title[0][value]'] = $this->randomMachineName(8);
-    $edit[$field_name . '[0][country_code]'] = 'US';
+
+    // Use javascript to fill country_code so other fields can be loaded.
+    $session->getPage()->fillField($field_name . '[0][country_code]', 'US');
+    $this->waitForAjaxToFinish();
+
     $edit[$field_name . '[0][recipient]'] = 'Some Recipient';
     $edit[$field_name . '[0][organization]'] = 'Some Organization';
     $edit[$field_name . '[0][address_line1]'] = '1098 Alta Ave';
@@ -390,27 +411,26 @@ class AddressDefaultWidgetTest extends WebTestBase {
     $edit[$field_name . '[0][locality]'] = 'Mountain View';
     $edit[$field_name . '[0][administrative_area]'] = 'US-CA';
     $edit[$field_name . '[0][postal_code]'] = '94043';
-    $this->drupalPostForm($this->nodeAddUrl, $edit, t('Save'));
-    $this->assertResponse(200);
-    $node = $this->drupalGetNodeByTitle($edit['title[0][value]']);
+    $this->submitForm($edit, t('Save'));
+    $this->assertSession()->statusCodeEquals(200);
+    $node = $this->getNodeByTitle($edit['title[0][value]']);
 
     $this->drupalGet('node/' . $node->id() . '/edit');
-    $this->assertFieldByName($field_name . '[0][country_code]', 'US');
-    $this->assertFieldByName($field_name . '[0][administrative_area]', 'US-CA');
-    $this->assertFieldByName($field_name . '[0][locality]', 'Mountain View');
-    $this->assertFieldByName($field_name . '[0][postal_code]', '94043');
+    $this->assertSession()->fieldValueEquals($field_name . '[0][country_code]', 'US');
+    $this->assertSession()->fieldValueEquals($field_name . '[0][administrative_area]', 'US-CA');
+    $this->assertSession()->fieldValueEquals($field_name . '[0][locality]', 'Mountain View');
+    $this->assertSession()->fieldValueEquals($field_name . '[0][postal_code]', '94043');
 
     // Now change the country to China, subdivision fields should be cleared.
-    $edit = [];
-    $edit[$field_name . '[0][country_code]'] = 'CN';
-    $this->drupalPostAjaxForm('node/' . $node->id() . '/edit', $edit, $field_name . '[0][country_code]');
-    $this->assertResponse(200);
+    $this->drupalGet('node/' . $node->id() . '/edit');
+    $this->submitForm([$field_name . '[0][country_code]' => 'CN'], $field_name . '[0][country_code]');
+    $this->assertSession()->statusCodeEquals(200);
     // Check that values are cleared.
-    $this->assertFieldByName($field_name . '[0][country_code]', 'CN', 'Country changed to CN');
-    $this->assertFieldByName($field_name . '[0][administrative_area]', '', 'Field administrative_area has been cleared');
-    $this->assertFieldByName($field_name . '[0][locality]', '', 'Field locality has been cleared');
-    $this->assertFieldByName($field_name . '[0][dependent_locality]', '', 'Field dependent_locality has been cleared');
-    $this->assertFieldByName($field_name . '[0][postal_code]', '', 'Field postal_code has been cleared.');
+    $this->assertSession()->fieldValueEquals($field_name . '[0][country_code]', 'CN', 'Country changed to CN');
+    $this->assertSession()->fieldValueEquals($field_name . '[0][administrative_area]', '', 'Field administrative_area has been cleared');
+    $this->assertSession()->fieldValueEquals($field_name . '[0][locality]', '', 'Field locality has been cleared');
+    $this->assertSession()->fieldValueEquals($field_name . '[0][dependent_locality]', '', 'Field dependent_locality has been cleared');
+    $this->assertSession()->fieldValueEquals($field_name . '[0][postal_code]', '', 'Field postal_code has been cleared.');
   }
 
   /**
@@ -430,14 +450,35 @@ class AddressDefaultWidgetTest extends WebTestBase {
    *   will be displayed.
    */
   protected function assertOptions($id, $options, $message) {
-    $elements = $this->xpath('//select[@name="' . $id . '"]/option/@value');
+    $elements = $this->xpath('//select[@name="' . $id . '"]/option');
     $foundOptions = [];
-    foreach ($elements as $key => $element) {
-      if ($option = $element->__toString()) {
+    foreach ($elements as $element) {
+      if ($option = $element->getValue()) {
         $foundOptions[] = $option;
       }
     }
     $this->assertFieldValues($foundOptions, $options, $message);
+  }
+
+
+  /**
+   * Asserts that a select field has a selected option.
+   *
+   * @param string $id
+   *   ID of select field to assert.
+   * @param array $option
+   *   Option to assert.
+   * @param string $message
+   *   (optional) A message to display with the assertion. Do not translate
+   *   messages: use \Drupal\Component\Utility\SafeMarkup::format() to embed
+   *   variables in the message text, not t(). If left blank, a default message
+   *   will be displayed.
+   */
+  protected function assertOptionSelected($id, $option, $message = '') {
+    $elements = $this->xpath('//select[@name=:id]//option[@value=:option]', array(':id' => $id, ':option' => $option));
+    foreach ($elements as $element) {
+      $this->assertNotEmpty($element->isSelected(), $message ? $message : new FormattableMarkup('Option @option for field @id is selected.', array('@option' => $option, '@id' => $id)));
+    }
   }
 
   /**
@@ -469,7 +510,15 @@ class AddressDefaultWidgetTest extends WebTestBase {
       $valid = FALSE;
     }
 
-    $this->assertTrue($valid, $message);
+    $this->assertNotEmpty($valid, $message);
+  }
+
+  /**
+   * Waits for jQuery to become active and animations to complete.
+   */
+  protected function waitForAjaxToFinish() {
+    $condition = "(0 === jQuery.active && 0 === jQuery(':animated').length)";
+    $this->assertJsCondition($condition, 10000);
   }
 
 }
