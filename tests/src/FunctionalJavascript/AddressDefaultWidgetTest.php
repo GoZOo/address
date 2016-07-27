@@ -266,10 +266,8 @@ class AddressDefaultWidgetTest extends JavascriptTestBase {
     // The address_test module is installed here, not in setUp().
     // This way the module's events will not affect other tests.
     self::$modules[] = 'address_test';
-    $container = $this->initKernel(\Drupal::request());
-    $this->initConfig($container);
-    $this->installModulesFromClassProperty($container);
-    $this->rebuildAll();
+    $this->container->get('module_installer')->install(self::$modules);
+    $this->container = $this->kernel->rebuildContainer();
     // Get available countries and initial values from module's event subscriber.
     $subscriber = \Drupal::service('address_test.event_subscriber');
     $availableCountries = array_keys($subscriber->getAvailableCountries());
@@ -284,7 +282,9 @@ class AddressDefaultWidgetTest extends JavascriptTestBase {
         $this->assertSession()->fieldValueEquals($name, $value);
       }
     }
-    // Remove the address_test module.
+    // Uninstall and remove the address_test module.
+    $this->container->get('module_installer')->uninstall(['address_test']);
+    $this->container = $this->kernel->rebuildContainer();
     array_pop(self::$modules);
   }
 
